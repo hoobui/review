@@ -1,0 +1,229 @@
+iptalbles
+4表：
+filter--->nat--->mangle--->raw
+5链：
+Input--->output--->forward--->prerouting--->postrouting
+
+iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+1、iptables命令格式
+     iptables [-t 表] －命令 匹配 操作 （大小写敏感）
+   动作选项
+     ACCEPT          接收数据包
+     DROP             丢弃数据包
+     REDIRECT      将数据包重新转向到本机或另一台主机的某一个端口，通常功能实现透明代理或对外开放内网的某些服务
+     SNAT             源地址转换
+     DNAT             目的地址转换
+     MASQUERADE       IP伪装
+     LOG               日志功能
+2、定义规则
+   ①先拒绝所有的数据包，然后再允许需要的数据包
+      iptalbes -P INPUT DROP
+      iptables -P FORWARD DROP
+      iptables -P OUTPUT ACCEPT
+   ②查看nat表所有链的规则列表
+      iptables -t nat -L
+   ③增加，插入，删除和替换规则
+     iptables [-t 表名] <-A|I|D|R> 链名 [规则编号] [-i|o 网卡名称] [-p 协议类型] [-s 源ip|源子网] [--sport 源端口号] [-d 目的IP|目标子网] [--dport 目标端口号] [-j 动作]
+    参数：-A 增加
+               -I 插入
+               -D 删除
+               -R 替换
+例子
+①iptables -t filter -A INPUT -s 192.168.1.5 -i eth0 -j DROP
+禁止IP为192.168.1.5的主机从eth0访问本机
+②iptables -t filter -I INPUT 2 -s 192.168.5.0/24 -p tcp --dport 80 -j DROP
+禁止子网192.168.5.0访问web服务
+③iptables -t filter -I INPUT 2 -s 192.168.7.9 -p tcp --dport ftp -j DROP
+禁止IP为192.168.7.9访问FTP服务
+④iptables -t filter -L INPUT
+查看filter表中INPUT链的规则
+⑤iptables -t nat -F
+删除nat表中的所有规则
+⑥iptables -I FORWARD -d wwww.playboy.com -j DROP
+禁止访问www.playboy.com网站
+⑦iptables -I FORWARD -s 192.168.5.23 -j DROP
+禁止192.168.5.23上网
+SNAT地址转换:
+ iptables  -t  nat  -A POSTROUTING  -s  192.168.4.0/24 -p tcp --dport 80  -j SNAT  --to-source 192.168.2.5
+所有iptables规则都是临时规则，如果需要永久保留规则需要执行如下命令:
+service  iptables save
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+Apache的三种工作模式及相关配置：
+1、Prefork MPM--->多进程        
+优点：成熟，兼容所有新老模块    
+缺点：一个进程相对占用更多的系统资源，消耗更多的内存。
+2、Worker MPM--->多进程+多线程
+优点：占据更少的内存，高并发下表现更优秀。
+缺点：必须考虑线程安全的问题，因为多个子线程是共享父进程的内存地址的。
+3、Event MPM--->多进程+多线程+epoll
+Apache中最新的模式，在现在版本里的已经是稳定可用的模式。它和 worker模式很像，最大的区别在于，它解决了 keep-alive 场景下 ，长期被占用的线程的资源浪费问题.event MPM需要Linux系统（Linux 2.6+）对Epoll的支持，才能启用。
+
+HTTP协议的主要特点可概括:
+1.支持客户/服务器模式。
+2.简单快速：客户向服务器请求服务时，只需传送请求方法和路径。请求方法常用的有GET、HEAD、POST。每种方法规定了客户与服务器联系的类型不同。
+3.灵活：HTTP允许传输任意类型的数据对象。正在传输的类型由Content-Type加以标记。
+4.无连接：无连接的含义是限制每次连接只处理一个请求。服务器处理完客户的请求，并收到客户的应答后，即断开连接。采用这种方式可以节省传输时间。
+5.无状态：HTTP协议是无状态协议。无状态是指协议对于事务处理没有记忆能力。缺少状态意味着如果后续处理需要前面的信息，则它必须重传，这样可能导致每次连接传送的数据量增大。另一方面，在服务器不需要先前信息时它的应答就较快。
+
+http请求由三部分组成，分别是：请求行、消息报头、请求正文
+HTTP响应也是由三个部分组成，分别是：状态行、消息报头、响应正文
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+linux系统调优：
+控制进程资源的使用
+/proc/2822（对应pid）/io：包括该进程的 IO 统计信息（IO 操作时的读写字符数）
+cat /boot/config-$(uname -r) | grep -i cgroups  查看是否开启进程所属的控制组
+CONFIG_CGROUPS=y	表示开启
+Linux 中为每个用户限制的进程数(防止死循环 fork bomb)
+/etc/security/limits.conf 文件末尾添加下面一行来设置限制：*  hard  nproc 10
+Linux 进程管理工具:
+renice 调整执行优先级（系统资源的使用）
+ 通过使用 renice 调整执行优先级（系统资源的使用）。这意味着内核会根据分配的优先级（众所周知的 “niceness”，它是一个范围从-20到19的整数）给进程分配更多或更少的系统资源。这个值越小，执行优先级越高
+语法：renice [-n] <new priority> <UID, GID, PGID, or empty> identifier
+     renice <优先级 > <进程ID>
+如果 new priority 后面的参数没有（为空），默认就是 PID。在这种情况下，PID=identifier 的进程的 niceness 值会被设置为<new priority>
+Linux 进程和资源监视常用基本命令:
+ps	top	 lsof	strace	ltrace	time  renice  uptime  free	vmstat  iostat
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+Mysql问题及解决：
+1.错误日志有类似警告：
+120119 16:26:04 [Warning] IP address '192.168.1.10' could not be resolved: Name or service not known
+解决:修改配置文件添加并需要重启  
+[mysqld] 
+skip-name-resolve
+2.问题错误日志：Error: Can’t create a new thread (errno 12)
+数据库服务器问题，数据库操作无法创建新线程。一般是有以下3个方面的原因： 
+1）、MySQL 线程开得太多。 
+2）、服务器系统内存溢出。 
+3）、环境软件损坏或系统损坏。
+【问题解决】
+1）进入 phpmyadmin 的 mysql 数据库中的 user 表，对数据库的用户进行编辑，修改 max_connections 的值。适当的改小一点。 
+2）联系服务器管理员检查服务器的内存和系统是否正常，如果服务器内存紧张，请检查一下哪些进程消耗了服务器的内存，同时考虑是否增加服务器的内存来提高整个系统的负载能力。 
+3）mysql版本更改为稳定版本 
+4）优化网站程序的sql等等
+3. 操作报错：删除库时:ERROR 1010 (HY000): Error dropping database
+原因：在该库目录内含有自己放的文件，删除自己放的文件后再操作即可
+4.导出数据很快，导入到新库时却很慢：
+在导出时合理使用几个参数，可以大大加快导入的速度。
+-e 使用包括几个VALUES列表的多行INSERT语法; 
+--max_allowed_packet=XXX 客户端/服务器之间通信的缓存区的最大大小; 
+--net_buffer_length=XXX TCP/IP和套接字通信缓冲区大小,创建长度达net_buffer_length的行 
+注意：max_allowed_packet和net_buffer_length不能比目标数据库的配置数值大，否则可能出错。
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+LVS常见的问题及原因分析
+一、裂脑：
+由于两台高可用服务器对之间，在指定时间内，无法相互检测到对方的心跳，而各自启动故障切换转移功能，取得资源服务及所有权，而此时的两台高可用服务器对都还或者，并且正在运行，这样就会导致同一个IP或服务在两段同时启动而发生冲突的严重问题，最严重的是两台主机占用同一个VIP，当用户写入数据的时候可能同时写在两台服务器上。 
+1）产生裂脑原因：
+1、心跳链路故障，导致无法通信----->心跳线坏了（故障或老化）
+2、开启防火墙阻挡心跳消息传输----->网卡相关驱动坏了，IP配置即冲突问题（直连）
+3、心跳网卡地址配置等不正确    ----->心跳线间连接的设备故障（网卡及交换机） 
+4、其他：心跳方式不同，心跳广播冲突，软件bug等------>仲裁机器出问题
+2）防止裂脑的方法:
+1、采用串行或以太网电缆连接，同时用两条心跳线路
+2、做好裂脑的监控报警，在问题发生时人为第一时间介入仲裁
+3、启用磁盘锁，即正在服务的一方只在发现心跳线全部断开时，才开启磁盘锁
+4、fence设备（智能电源管理设备）
+5、增加仲裁盘
+6、加冗余线路
+二、lvs负载不均的原因
+①lvs自身的会话保持参数设置。优化：使用cookie代替session
+②lvs调度算法设置，例如rr、wrr、
+③后端RS节点的会话保持参数，例如apache的keepalive参数
+④访问量较少的情况下，不均衡的现象更加明显
+⑤用户发送的请求时间长短和请求资源多少以及大小
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+openstack组件
+Horizon--->提供web管理界面
+Keystone-->提供认证身份管理服务
+Neutron--->创建虚拟网络，提供网络服务
+Cinder--->提供虚拟机的存储卷服务，为Nova中实例永久存储
+Nova---->管理虚拟机服务
+Glance---->虚拟机镜像注册角色
+Swift----->提供对象块存储
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+yum -y install ansible      #网络yum
+ansible.cfg 的查找顺序是 
+1  ANSIBLE_CONFIG 变量定义的配置文件
+2 当前目录下的 ./ansible.cfg 文件
+3 前用户家目录下 ~/ansible.cfg 文件
+4 /etc/ansible/ansible.cfg 文件
+
+ansible  命令基础
+ansible  主机分组  -m 模块  -a '命令和参数'
+
+创建密钥对 id_rsa 是私钥，  id_rsa.pub 是公钥
+ssh-keygen -t rsa -b 2048 -N ''
+
+给所有主机部署密钥
+ansible all -m authorized_key -a "user=root exclusive=true manage_dir=true key='$(< /root/.ssh/id_rsa.pub)'" -k
+
+ansible-playbook --syntax-check yaml文件名        检查yaml文件语法
+---
+- name: Set authorized key took from file
+  hosts: all
+  tasks:
+  - name:
+  	authorized_key:
+      user: charlie
+      state: present
+      key: "{{ lookup('file', '/root/.ssh/id_rsa.pub') }}"
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+docker 自定义镜像仓库
+1.vim /etc/docker/daemon.json
+{"insecure-registries":["server IP:5000"]}
+2.restart docker
+3.docker run -d -p 5000:5000 registry
+4.docker tag 镜像名:标签  serverIP:5000/镜像名:标签        打标签
+5.docker run -it serverIP:5000/镜像名:标签           	    启动远程镜像
+
+依赖于iptables实现映射
+容器的存储与端口映射
+docker run -d      -p    5000:5000  镜像名:标签
+存储卷的映射		                 宿主机:容器(容器内目录若存在则覆盖内容，不存在则创建目录)
+docker run -d -v /var/webroot:/var/www/html   myos:httpd
+
+查询镜像仓库有哪些镜像
+curl http://serverIP:5000/v2/_catalog
+curl http://serverIP:5000/v2/镜像名/tags/list
+查看docker虚拟交换机信息
+docker network list 
+创建网络
+docker network create --subnet 192.168.200.0/24 -d bridge docker1
+docker network create --subnet 192.168.200.0/24 -d bridge -o com.docker.network.bridge.name=docker1 docker1
+在新的网桥上创建容器
+docker  run -it --network=br0  myos
+
+docker insppect -f '{{.NetworkSetting.IPAddress}}' 镜像ID  
+输出：172.17.0.2		查看/获取某个字段的值
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+Kubernetes
+1.master:集群的管理节点，负责管理集群，提供集群的资源数据访问入口。
+Kubernetes API server提供HTTP Rest接口的关键服务进程，是Kubernetes里所有资源的增、删、改、查等操作的唯一入口。也是集群控制的入口进程；Kubernetes Controller Manager是Kubernetes所有资源对象的自动化控制中心；Kubernetes Schedule是负责资源调度（Pod调度）的进程
+2.node:集群架构中运行Pod的服务节点（亦叫agent或minion）。Node是Kubernetes集群操作的单元，用来承载被分配Pod的运行，是Pod运行的宿主机。关联Master管理节点，拥有名称和IP、系统资源信息。运行docker eninge服务，守护进程kunelet及负载均衡器kube-proxy.
+3.Pod:运行于Node节点上，若干相关容器的组合。运行在同一宿主机上，使用相同的网络命名空间、IP地址和端口，能够通过localhost进行通。是Kurbernetes进行创建、调度和管理的最小单位
+4.Replication Controller:用来管理Pod的副本，保证集群中存在指定数量的Pod副本。
+5.Service:定义了Pod的逻辑集合和访问该集合的策略，是真实服务的抽象
+Kubernetes的三种IP:
+Node IP：是Kubernetes集群中节点的物理网卡IP地址，所有属于这个网络的服务器之间都能通过这个网络直接通信。这也表明Kubernetes集群之外的节点访问Kubernetes集群之内的某个节点或者TCP/IP服务的时候，必须通过Node IP进行通信
+Pod IP：是每个Pod的IP地址，他是Docker Engine根据docker0网桥的IP地址段进行分配的，通常是一个虚拟的二层网络。
+Cluster IP：是一个虚拟的IP,仅仅作用于Kubernetes Service这个对象，并由Kubernetes管理和分配P地址;无法被ping，他没有一个“实体网络对象”来响应;只能结合Service Port组成一个具体的通信端口，单独的Cluster IP不具备通信的基础，并且他们属于Kubernetes集群这样一个封闭的空间。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
