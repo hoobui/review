@@ -242,14 +242,38 @@ Kubernetes的三种IP:
 Node IP：是Kubernetes集群中节点的物理网卡IP地址，所有属于这个网络的服务器之间都能通过这个网络直接通信。这也表明Kubernetes集群之外的节点访问Kubernetes集群之内的某个节点或者TCP/IP服务的时候，必须通过Node IP进行通信
 Pod IP：是每个Pod的IP地址，他是Docker Engine根据docker0网桥的IP地址段进行分配的，通常是一个虚拟的二层网络。
 Cluster IP：是一个虚拟的IP,仅仅作用于Kubernetes Service这个对象，并由Kubernetes管理和分配P地址;无法被ping，他没有一个“实体网络对象”来响应;只能结合Service Port组成一个具体的通信端口，单独的Cluster IP不具备通信的基础，并且他们属于Kubernetes集群这样一个封闭的空间。
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ELK(java)
+elasticsearch  --  数据库、负责日志的存储  
+logstash       --  收集日志、标准化的程序         input-->filter-->output
+kibana         --  图形的展示工具
 
-
-
-
-
-
-
-
+IP:9200/_cluster/health?pretty     查看集群状态
+集群插件
+/usr/share/elasticsearch/bin
+下载插件文件到本地，必须使用 file:// 绝对路径安装
+./plugin install file:///usr/share/elasticsearch/bin/bigdesk-master.zip 
+使用远程 uri 路径可以直接安装
+./plugin install ftp://192.168.1.254/elk/elasticsearch-head-master.zip
+./plugin install ftp://192.168.1.254/elk/elasticsearch-kopf-master.zip
+使用 ./plugin list 查看插件
+集群 api 查询地址
+http://192.168.1.15:9200/_cat
+http://192.168.1.15:9200/_cat/nodes?v  显示详细信息
+http://192.168.1.15:9200/_cat/nodes?help  显示帮助信息
+创建索引
+curl -XPUT 'http://192.168.1.13:9200/t1/' -d '{
+    "settings":{
+        "index":{
+            "number_of_shards": 5,
+            "number_of_replicas": 1
+        }
+    }
+}'
+_bulk  导入关键字
+curl -X "POST" "http://192.168.1.13:9200/_bulk" --data-binary @shakespeare.json
+如果没有 index 和 type ，我们需要自己指定一下 index 和 type
+curl -X "POST" "http://192.168.1.13:9200/haha/xixi/_bulk" --data-binary @accounts.json
 
 
 
