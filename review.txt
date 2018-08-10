@@ -1,3 +1,73 @@
+内存管理机制
+
+Linux的内存管理采取的是分页存取机制：为了保证物 理内存能得到充分的利用，内核会在适当的时候将物理内存中不经常使用的数据块自动交换到虚拟内存中，而将经常使用的信息保留到物理内存。
+
+buffers与cached
+buffers与cached都是内存操作，用来保存系统曾经打开过的文件以及文件属性信息，这样当操作系统需要读取某些文件时，会首先在buffers 与cached内存区查找，如果找到，直接读出传送给应用程序，如果没有找到需要数据，才从磁盘读取，这就是操作系统的缓存机制，通过缓存，大大提高了操 作系统的性能。但buffers与cached缓冲的内容却是不同的。
+
+buffers是用来缓冲块设备做的，它只记录文件系统的元数据（metadata）以及 tracking in-flight pages，而cached是用来给文件做缓冲。更通俗一点说：buffers主要用来存放目录里面有什么内容，文件的属性以及权限等等。而cached直接用来记忆我们打开过的文件和程序。
+
+内存释放
+linux系统中/proc是一个虚拟文件系统，我们可以通过对它的读写操作做为与kernel实体间进行通信的一种手段。也就是说可以通过修改 /proc中的文件，来对当前kernel的行为做出调整。那么我们可以通过调整/proc/sys/vm/drop_caches来释放内存。
+
+echo 10 > /proc/sys/vm/dirty_background_rato (当脏数据占据物理内存10%时，触发pdflush同步到硬盘）
+echo 2000 > /proc/sys/vm/dirty_expire_centisecs (当脏数据在物理内存的逗留时间超过2000ms时被同步到硬盘）
+echo 10 > /proc/sys/vm/swappiness(值为0表示尽量都用物理内存，值为100表示积极的使用swap分区；）
+
+cpu利用率和cpu 队列
+CPU时间片
+在Linux的内核处理过程中，每一个进程默认会有一个固定的时间片来执行命令（默认为1/100秒），这段时间内进程被分配到CPU，然后独占使用。如果使用完，同时未到时间片的规定时间，那么就主动放弃CPU的占用，如果到时间片尚未完成工作，那么CPU的使用权也会被收回，进程将会被中断挂起等待下一个时间片。
+CPU利用率= CPU使用时间的总和去除以统计的时间段
+Average Load体现的是在某一统计时间段内，所有使用电话的人加上等待电话分配的人一个平均统计
+
+echo 03 > /proc/irq/19/smp-affinity (将中断类型为19的中断绑定到第三个cpu上处理）
+
+I/O:
+根据应用类型，适当调整page size 和block size;
+调整进程I/O请求的优先级，分三种级别：1代表 real time ; 2代表best-effort; 3代表idle
+
+网络可调性能参数 :
+1.查看网卡设置是否全双工传输的： echtool eth0
+2. 设置MTU（最大传输单元），在带宽G以上的时候，要考虑将MTU增大，提高传输性能；如： ifconfig eth0 mtu 9000 up
+3. 增加网络数据缓存；传输数据时linux是将包先放入缓存，填满缓存后即发送出去；读操作类似；
+sysctl -w net.ipv4.tcp_rmem="4096 87380 8388608" :设置tcp读缓存：最小缓存，初始化时，最大缓存
+sysctl -w net.ipv4.tcp_wmem="4096 87380 8388608" ：设置tcp写缓存：最小缓存，初始化时，最大缓存
+4.禁用window_scaling,并且直接设置window_size;(就像我们经常设置jvm的参数：xms = xmx一样
+sysctl -w net.ipv4.tcp_window_scaling=0
+5.设置TCP连接可重用性： 对于TIME_OUT状态的TCP连接可用于下一个TCP重用，这样减少了三次握手和创建时间，非常提高性能，尤其对于web server；
+如： 开启可重用tcp功能： sysctl -w net.ipv4.tcp_tw_reuse=1 sysctl -w net.ipv4.tcp_tw_recyle=1 
+6.禁用掉没必要的tcp/ip协议功能：比如icmp;broadcast包的接收；
+7. linux对于keeplive的tcp连接有一个默认的过期时间；可以减小这个时间，让没用的连接释放掉，毕竟tcp连接数是有限的嘛(连接数受端口限制1024～65535,且受系统打开文件数量限制ulimit)；
+如： sysctl -w net.ipv4.tcp_keepalive_time=1800 （设置过期时间，1800s)
+8.设置最大tcp正在连接状态（还没ESTABLISHED)队列长度；避免由于太多的tcp连接过来，导致服务器挂掉；比如DoS攻击
+如：sysctl -w net.ipv4.tcp_max_syn_backlog=4096
+9. 绑定tcp类型的中断到一个cpu上；（让cpu去亲和这个类型中断，避免频繁的中断，影响线程调度性能）
+
+lsof  -i:port  可以检测到打开套接字的状况
+sar -n SOCK 查看tcp创建的连接数
+tcpdump -iany tcp port 9000 对tcp端口为9000的进行抓包
+netstat -nat  查看TCP各个状态的数量
+ awk  '{ip[$1]++} END{for(i in ip) {print i,ip[i]}}' /var/log/httpd/access_log		apache访问ip统计
+netstat -n|awk '/^tcp/{++S[$NF]}END{for (key in S) print key,S[key]}'
+TIME_WAIT 286		另一边已初始化一个释放
+FIN_WAIT1 5			应用说它已经完成
+FIN_WAIT2 6			另一边已同意释放
+ESTABLISHED 269		正常数据传输状态
+SYN_RECV 5			一个连接请求已经到达，等待确认
+CLOSING 1			两边同时尝试关闭
+
+如发现系统存在大量TIME_WAIT状态的连接，通过调整内核参数解决：
+编辑文件/etc/sysctl.conf，加入以下内容：
+net.ipv4.tcp_syncookies = 1		表示开启SYN Cookies。当出现SYN等待队列溢出时，启用cookies来处理，可防范少量SYN攻击，默认为0，表示关闭；
+net.ipv4.tcp_tw_reuse = 1		允许将TIME-WAIT sockets重新用于新的TCP连接，默认为0，表示关闭；
+net.ipv4.tcp_tw_recycle = 1		表示开启TCP连接中TIME-WAIT sockets的快速回收，默认为0，表示关闭
+net.ipv4.tcp_fin_timeout = 30
+
+开启路由转发
+echo "1" > /proc/sys/net/ipv4/ip_forward
+echo "net.ipv4.ip_forward = 1" > /sysctl.conf
+sysctl -p
+============================================================================
 iptalbles
 4表：
 filter--->nat--->mangle--->raw
@@ -109,6 +179,7 @@ skip-name-resolve
 --net_buffer_length=XXX TCP/IP和套接字通信缓冲区大小,创建长度达net_buffer_length的行 
 注意：max_allowed_packet和net_buffer_length不能比目标数据库的配置数值大，否则可能出错。
 -------------------------------------------------------------------------------------------------------------------------------------------------------
+LVS模式：
 LVS常见的问题及原因分析
 一、裂脑：
 由于两台高可用服务器对之间，在指定时间内，无法相互检测到对方的心跳，而各自启动故障切换转移功能，取得资源服务及所有权，而此时的两台高可用服务器对都还或者，并且正在运行，这样就会导致同一个IP或服务在两段同时启动而发生冲突的严重问题，最严重的是两台主机占用同一个VIP，当用户写入数据的时候可能同时写在两台服务器上。 
@@ -162,16 +233,6 @@ HAProxy:
 6. HAProxy可以对Mysql进行负载均衡，对后端的DB节点进行检测和负载均衡。
 7. 支持负载均衡算法：轮循、加权轮循、原地址保持、请求URL、根据cookie
 8. 不能做Web服务器即Cache。
--------------------------------------------------------------------------------------------------------------------------------------------------------
-openstack组件
-Horizon--->提供web管理界面
-Keystone-->提供认证身份管理服务
-Neutron--->创建虚拟网络，提供网络服务
-Cinder--->提供虚拟机的存储卷服务，为Nova中实例永久存储
-Nova---->管理虚拟机服务
-Glance---->虚拟机镜像注册角色
-Swift----->提供对象块存储
-
 --------------------------------------------------------------------------------------------------------------------------------------------------------
 yum -y install ansible      #网络yum
 ansible.cfg 的查找顺序是 
@@ -202,6 +263,23 @@ ansible-playbook --syntax-check yaml文件名        检查yaml文件语法
 ansible-playbook --syntak-check playbook.yaml   检测语法
 ansible-playbook -C playbook.yaml				运行测试
 ansible-playbook -C playbook.yaml --list		显示受到影响的主机
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+kvm
+kvm:是用来虚拟化或者说模拟CPU、内存等硬件的
+	VMM:负责管理虚拟机的资源，并拥有所有虚拟机资源的控制权
+	VMX:为了CPU层面支持VT技术,扩展了传统的x86处理器架构,引入了VMX模式，VMX分为root和non-root。
+QEMU:只是用来虚拟化硬盘的
+libvirt:提供了整个虚拟机的管理
+
+openstack组件
+Horizon--->提供web管理界面
+Keystone-->提供认证身份管理服务
+Neutron--->创建虚拟网络，提供网络服务
+Cinder--->提供虚拟机的存储卷服务，为Nova中实例永久存储
+Nova---->管理虚拟机服务
+Glance---->虚拟机镜像注册角色
+Swift----->提供对象块存储
+
 --------------------------------------------------------------------------------------------------------------------------------------------------------
 docker 自定义镜像仓库
 1.vim /etc/docker/daemon.json
@@ -210,7 +288,7 @@ docker 自定义镜像仓库
 3.docker run -d -p 5000:5000 registry
 4.docker tag 镜像名:标签  serverIP:5000/镜像名:标签        打标签
 5.docker run -it serverIP:5000/镜像名:标签           	    启动远程镜像
-
+docker概念
 依赖于iptables实现映射
 容器的存储与端口映射
 docker run -d      -p    5000:5000  镜像名:标签
@@ -274,7 +352,7 @@ _bulk  导入关键字
 curl -X "POST" "http://192.168.1.13:9200/_bulk" --data-binary @shakespeare.json
 如果没有 index 和 type ，我们需要自己指定一下 index 和 type
 curl -X "POST" "http://192.168.1.13:9200/haha/xixi/_bulk" --data-binary @accounts.json
-
+25444 夏
 
 
 
