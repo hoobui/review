@@ -160,6 +160,25 @@ Mysql问题及解决：
 解决:修改配置文件添加并需要重启  
 [mysqld] 
 skip-name-resolve
+慢查询日志：
+使用mysqldumpslow
+-s：是表示按照何种方式排序
+c: 访问计数
+l: 锁定时间
+r: 返回记录
+t: 查询时间
+al:平均锁定时间
+ar:平均返回记录数
+at:平均查询时间
+-t：显示最多的请求
+得到返回记录集最多的10个SQL。
+mysqldumpslow -s r -t 10 /database/mysql/mysql06_slow.log
+得到访问次数最多的10个SQL
+mysqldumpslow -s c -t 10 /database/mysql/mysql06_slow.log
+得到按照时间排序的前10条里面含有左连接的查询语句。
+mysqldumpslow -s t -t 10 -g “left join” /database/mysql/mysql06_slow.log
+另外建议在使用这些命令时结合 | 和more 使用 ，否则有可能出现刷屏的情况。
+mysqldumpslow -s r -t 20 /mysqldata/mysql/mysql06-slow.log | more 
 2.问题错误日志：Error: Can’t create a new thread (errno 12)
 数据库服务器问题，数据库操作无法创建新线程。一般是有以下3个方面的原因： 
 1）、MySQL 线程开得太多。 
@@ -357,8 +376,7 @@ Ceph的核心组件:
 OSD:功能是存储数据、复制数据、平衡数据、恢复数据等
 Monitor:负责监视Ceph集群，维护集群的健康状态，同时维护着集群中的各种Map图
 MDS:MetaData Server，主要保存的文件系统服务的元数据，但对象存储和块存储设备是不需要使用该服务的。
-
-25444 夏
+---------------------------------------------------------------------------------------------------------------------------------------
 
 
 
